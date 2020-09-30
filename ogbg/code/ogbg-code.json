@@ -1,0 +1,27 @@
+{
+  "dataset_name": "ogbg-code",
+  "seed": 777,
+  "num_workers": 0,
+  "feature": "full",
+  "max_seq_len": 5,
+  "num_vocab": 5000,
+  "hyperparams": {
+    "batch_size": 64,
+    "epochs": 101,
+    "learning_rate": 0.0001,
+    "step_size": 5,
+    "decay_rate": 0.6
+  },
+  "architecture": {
+    "layers": 4,
+    "hidden": 512,
+    "pooling": "mean",
+    "JK": "cat",
+    "nonlinear_conv": "EB1",
+    "dropout": 0.5,
+    "variants": {
+      "BN": "Y",
+      "fea_activation": "ReLU"
+    }
+  }
+}

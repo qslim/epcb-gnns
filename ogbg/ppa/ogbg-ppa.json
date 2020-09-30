@@ -1,0 +1,24 @@
+{
+  "dataset_name": "ogbg-ppa",
+  "num_workers": 0,
+  "feature": "full",
+  "hyperparams": {
+    "batch_size": 32,
+    "epochs": 601,
+    "learning_rate": 0.0005,
+    "step_size": 20,
+    "decay_rate": 0.8
+  },
+  "architecture": {
+    "layers": 4,
+    "hidden": 256,
+    "pooling": "add",
+    "JK": "cat",
+    "nonlinear_conv": "EB1",
+    "dropout": 0.5,
+    "variants": {
+      "BN": "Y",
+      "fea_activation": "ReLU"
+    }
+  }
+}

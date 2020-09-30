@@ -1,0 +1,272 @@
+import torch
+from torch_geometric.data import DataLoader
+from tensorboardX import SummaryWriter
+import torch.optim as optim
+import torch.nn.functional as F
+from torchvision import transforms
+
+from tqdm import tqdm
+import time
+import numpy as np
+import pandas as pd
+import os
+
+### importing OGB
+from ogb.graphproppred import PygGraphPropPredDataset, Evaluator
+
+import sys
+sys.path.append('../..')
+
+### importing utils
+from ogbg.code.proc import ASTNodeEncoder, get_vocab_mapping
+### for data transform
+from ogbg.code.proc import augment_edge, encode_y_to_arr, decode_arr_to_seq
+
+from model import Net
+from utils.config import process_config, get_args
+
+
+multicls_criterion = torch.nn.CrossEntropyLoss()
+
+
+def train(model, device, loader, optimizer):
+    model.train()
+
+    loss_accum = 0
+    for step, batch in enumerate(loader):
+        batch = batch.to(device)
+
+        if batch.x.shape[0] == 1 or batch.batch[-1] == 0:
+            pass
+        else:
+            pred_list = model(batch)
+            optimizer.zero_grad()
+
+            loss = 0
+            for i in range(len(pred_list)):
+                loss += multicls_criterion(pred_list[i].to(torch.float32), batch.y_arr[:,i])
+
+            loss = loss / len(pred_list)
+
+            loss.backward()
+            optimizer.step()
+
+            loss_accum += loss.item()
+
+    print('Average training loss: {}'.format(loss_accum / (step + 1)))
+    return loss_accum / (step + 1)
+
+
+def eval(model, device, loader, evaluator, arr_to_seq):
+    model.eval()
+    seq_ref_list = []
+    seq_pred_list = []
+
+    for step, batch in enumerate(loader):
+        batch = batch.to(device)
+
+        if batch.x.shape[0] == 1:
+            pass
+        else:
+            with torch.no_grad():
+                pred_list = model(batch)
+
+            mat = []
+            for i in range(len(pred_list)):
+                mat.append(torch.argmax(pred_list[i], dim=1).view(-1, 1))
+            mat = torch.cat(mat, dim=1)
+
+            seq_pred = [arr_to_seq(arr) for arr in mat]
+
+            # PyG = 1.4.3
+            # seq_ref = [batch.y[i][0] for i in range(len(batch.y))]
+
+            # PyG >= 1.5.0
+            seq_ref = [batch.y[i] for i in range(len(batch.y))]
+
+            seq_ref_list.extend(seq_ref)
+            seq_pred_list.extend(seq_pred)
+
+    input_dict = {"seq_ref": seq_ref_list, "seq_pred": seq_pred_list}
+
+    return evaluator.eval(input_dict)
+
+
+def main():
+    args = get_args()
+    config = process_config(args)
+    print(config)
+
+    if config.get('seed') is not None:
+        torch.manual_seed(config.seed)
+        np.random.seed(config.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(config.seed)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    ### automatic dataloading and splitting
+    dataset = PygGraphPropPredDataset(name=config.dataset_name)
+
+    seq_len_list = np.array([len(seq) for seq in dataset.data.y])
+    print('Target seqence less or equal to {} is {}%.'.format(config.max_seq_len, np.sum(seq_len_list <= config.max_seq_len) / len(seq_len_list)))
+
+    split_idx = dataset.get_idx_split()
+
+    # print(split_idx['train'])
+    # print(split_idx['valid'])
+    # print(split_idx['test'])
+
+    # train_method_name = [' '.join(dataset.data.y[i]) for i in split_idx['train']]
+    # valid_method_name = [' '.join(dataset.data.y[i]) for i in split_idx['valid']]
+    # test_method_name = [' '.join(dataset.data.y[i]) for i in split_idx['test']]
+    # print('#train')
+    # print(len(train_method_name))
+    # print('#valid')
+    # print(len(valid_method_name))
+    # print('#test')
+    # print(len(test_method_name))
+
+    # train_method_name_set = set(train_method_name)
+    # valid_method_name_set = set(valid_method_name)
+    # test_method_name_set = set(test_method_name)
+
+    # # unique method name
+    # print('#unique train')
+    # print(len(train_method_name_set))
+    # print('#unique valid')
+    # print(len(valid_method_name_set))
+    # print('#unique test')
+    # print(len(test_method_name_set))
+
+    # # unique valid/test method name
+    # print('#valid unseen during training')
+    # print(len(valid_method_name_set - train_method_name_set))
+    # print('#test unseen during training')
+    # print(len(test_method_name_set - train_method_name_set))
+
+
+    ### building vocabulary for sequence predition. Only use training data.
+
+    vocab2idx, idx2vocab = get_vocab_mapping([dataset.data.y[i] for i in split_idx['train']], config.num_vocab)
+
+    # test encoder and decoder
+    # for data in dataset:
+    #     # PyG >= 1.5.0
+    #     print(data.y)
+    #
+    #     # PyG 1.4.3
+    #     # print(data.y[0])
+    #     data = encode_y_to_arr(data, vocab2idx, config.max_seq_len)
+    #     print(data.y_arr[0])
+    #     decoded_seq = decode_arr_to_seq(data.y_arr[0], idx2vocab)
+    #     print(decoded_seq)
+    #     print('')
+
+    ## test augment_edge
+    # data = dataset[2]
+    # print(data)
+    # data_augmented = augment_edge(data)
+    # print(data_augmented)
+
+    ### set the transform function
+    # augment_edge: add next-token edge as well as inverse edges. add edge attributes.
+    # encode_y_to_arr: add y_arr to PyG data object, indicating the array representation of a sequence.
+    dataset.transform = transforms.Compose([augment_edge, lambda data: encode_y_to_arr(data, vocab2idx, config.max_seq_len)])
+
+    ### automatic evaluator. takes dataset name as input
+    evaluator = Evaluator(config.dataset_name)
+
+    train_loader = DataLoader(dataset[split_idx["train"]], batch_size=config.hyperparams.batch_size, shuffle=True, num_workers=config.num_workers)
+    valid_loader = DataLoader(dataset[split_idx["valid"]], batch_size=config.hyperparams.batch_size, shuffle=False, num_workers=config.num_workers)
+    test_loader = DataLoader(dataset[split_idx["test"]], batch_size=config.hyperparams.batch_size, shuffle=False, num_workers=config.num_workers)
+
+    nodetypes_mapping = pd.read_csv(os.path.join(dataset.root, 'mapping', 'typeidx2type.csv.gz'))
+    nodeattributes_mapping = pd.read_csv(os.path.join(dataset.root, 'mapping', 'attridx2attr.csv.gz'))
+
+    ### Encoding node features into emb_dim vectors.
+    ### The following three node features are used.
+    # 1. node type
+    # 2. node attribute
+    # 3. node depth
+    node_encoder = ASTNodeEncoder(config.architecture.hidden, num_nodetypes=len(nodetypes_mapping['type']), num_nodeattributes=len(nodeattributes_mapping['attr']), max_depth=20)
+
+    model = Net(config.architecture,
+                num_vocab=len(vocab2idx),
+                max_seq_len=config.max_seq_len,
+                node_encoder=node_encoder).to(device)
+
+    # optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=config.hyperparams.learning_rate)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=config.hyperparams.step_size,
+                                                gamma=config.hyperparams.decay_rate)
+
+    valid_curve = []
+    test_curve = []
+    train_curve = []
+    trainL_curve = []
+
+    writer = SummaryWriter(config.directory)
+
+    ts_fk_algo_hp = str(config.time_stamp) + '_' \
+                    + str(config.commit_id[0:7]) + '_' \
+                    + str(config.architecture.nonlinear_conv) + '_' \
+                    + str(config.architecture.variants.fea_activation) + '_' \
+                    + str(config.architecture.pooling) + '_' \
+                    + str(config.architecture.JK) + '_' \
+                    + str(config.architecture.layers) + '_' \
+                    + str(config.architecture.hidden) + '_' \
+                    + str(config.architecture.variants.BN) + '_' \
+                    + str(config.architecture.dropout) + '_' \
+                    + str(config.hyperparams.learning_rate) + '_' \
+                    + str(config.hyperparams.step_size) + '_' \
+                    + str(config.hyperparams.decay_rate) + '_' \
+                    + 'B' + str(config.hyperparams.batch_size) + '_' \
+                    + 'S' + str(config.seed)
+
+    for epoch in range(1, config.hyperparams.epochs + 1):
+        print("Epoch {} training...".format(epoch))
+        train_loss = train(model, device, train_loader, optimizer)
+
+        scheduler.step()
+
+        print('Evaluating...')
+        train_perf = eval(model, device, train_loader, evaluator, arr_to_seq=lambda arr: decode_arr_to_seq(arr, idx2vocab))
+        valid_perf = eval(model, device, valid_loader, evaluator, arr_to_seq=lambda arr: decode_arr_to_seq(arr, idx2vocab))
+        test_perf = eval(model, device, test_loader, evaluator, arr_to_seq=lambda arr: decode_arr_to_seq(arr, idx2vocab))
+
+        # print({'Train': train_perf, 'Validation': valid_perf, 'Test': test_perf})
+        print('Train:', train_perf[dataset.eval_metric],
+              'Validation:', valid_perf[dataset.eval_metric],
+              'Test:', test_perf[dataset.eval_metric],
+              'Train loss:', train_loss)
+
+        train_curve.append(train_perf[dataset.eval_metric])
+        valid_curve.append(valid_perf[dataset.eval_metric])
+        test_curve.append(test_perf[dataset.eval_metric])
+        trainL_curve.append(train_loss)
+
+        writer.add_scalars(config.dataset_name, {ts_fk_algo_hp + '/traP': train_perf[dataset.eval_metric]}, epoch)
+        writer.add_scalars(config.dataset_name, {ts_fk_algo_hp + '/valP': valid_perf[dataset.eval_metric]}, epoch)
+        writer.add_scalars(config.dataset_name, {ts_fk_algo_hp + '/tstP': test_perf[dataset.eval_metric]}, epoch)
+        writer.add_scalars(config.dataset_name, {ts_fk_algo_hp + '/traL': train_loss}, epoch)
+    writer.close()
+
+    print('F1')
+    best_val_epoch = np.argmax(np.array(valid_curve))
+    best_train = max(train_curve)
+    print('Finished training!')
+    print('Best validation score: {}'.format(valid_curve[best_val_epoch]))
+    print('Test score: {}'.format(test_curve[best_val_epoch]))
+
+    print('Finished test: {}, Validation: {}, Train: {}, epoch: {}, best train: {}, best loss: {}'
+          .format(test_curve[best_val_epoch], valid_curve[best_val_epoch], train_curve[best_val_epoch],
+                  best_val_epoch, best_train, min(trainL_curve)))
+
+    # if not config.filename == '':
+    #     result_dict = {'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch], 'Train': train_curve[best_val_epoch], 'BestTrain': best_train}
+    #     torch.save(result_dict, config.filename)
+
+
+if __name__ == "__main__":
+    main()

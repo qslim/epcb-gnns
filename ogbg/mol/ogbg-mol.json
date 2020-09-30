@@ -1,0 +1,25 @@
+{
+  "dataset_name": "ogbg-molhiv",
+  "seed": 777,
+  "num_workers": 0,
+  "feature": "full",
+  "hyperparams": {
+    "batch_size": 64,
+    "epochs": 401,
+    "learning_rate": 0.0001,
+    "step_size": 20,
+    "decay_rate": 0.8
+  },
+  "architecture": {
+    "layers": 3,
+    "hidden": 64,
+    "pooling": "mean",
+    "JK": "cat",
+    "nonlinear_conv": "EB1",
+    "dropout": 0.5,
+    "variants": {
+      "BN": "Y",
+      "fea_activation": "ReLU"
+    }
+  }
+}
