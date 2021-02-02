@@ -1,3 +1,4 @@
+import random
 import torch
 from torch_geometric.data import DataLoader
 from tensorboardX import SummaryWriter
@@ -12,10 +13,16 @@ sys.path.append('../..')
 from model import Net
 from utils.config import process_config, get_args
 
-multicls_criterion = torch.nn.CrossEntropyLoss()
+
+class In:
+    def readline(self):
+        return "y\n"
+
+    def close(self):
+        pass
 
 
-def train(model, device, loader, optimizer):
+def train(model, device, loader, optimizer, multicls_criterion):
     model.train()
     loss_all = 0
 
@@ -51,7 +58,7 @@ def eval(model, device, loader, evaluator):
             with torch.no_grad():
                 pred = model(batch)
 
-            y_true.append(batch.y.view(-1,1).detach().cpu())
+            y_true.append(batch.y.view(-1, 1).detach().cpu())
             y_pred.append(torch.argmax(pred.detach(), dim=1).view(-1, 1).cpu())
 
     y_true = torch.cat(y_true, dim=0).numpy()
@@ -73,6 +80,7 @@ def main():
     print(config)
 
     if config.get('seed') is not None:
+        random.seed(config.seed)
         torch.manual_seed(config.seed)
         np.random.seed(config.seed)
         if torch.cuda.is_available():
@@ -81,6 +89,8 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     ### automatic dataloading and splitting
+
+    sys.stdin = In()
 
     dataset = PygGraphPropPredDataset(name=config.dataset_name, transform=add_zeros)
 
@@ -102,6 +112,8 @@ def main():
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=config.hyperparams.step_size,
                                                 gamma=config.hyperparams.decay_rate)
 
+    multicls_criterion = torch.nn.CrossEntropyLoss()
+
     valid_curve = []
     test_curve = []
     train_curve = []
@@ -111,8 +123,7 @@ def main():
 
     ts_fk_algo_hp = str(config.time_stamp) + '_' \
                     + str(config.commit_id[0:7]) + '_' \
-                    + str(config.architecture.nonlinear_conv) + '_' \
-                    + str(config.architecture.variants.fea_activation) + '_' \
+                    + str(config.architecture.methods) + '_' \
                     + str(config.architecture.pooling) + '_' \
                     + str(config.architecture.JK) + '_' \
                     + str(config.architecture.layers) + '_' \
@@ -123,11 +134,12 @@ def main():
                     + str(config.hyperparams.step_size) + '_' \
                     + str(config.hyperparams.decay_rate) + '_' \
                     + 'B' + str(config.hyperparams.batch_size) + '_' \
-                    + 'S' + str(config.seed if config.get('seed') is not None else "na")
+                    + 'S' + str(config.seed if config.get('seed') is not None else "na") + '_' \
+                    + 'W' + str(config.num_workers if config.get('num_workers') is not None else "na")
 
     for epoch in range(1, config.hyperparams.epochs + 1):
         print("Epoch {} training...".format(epoch))
-        train_loss = train(model, device, train_loader, optimizer)
+        train_loss = train(model, device, train_loader, optimizer, multicls_criterion)
 
         scheduler.step()
 
@@ -136,7 +148,6 @@ def main():
         valid_perf = eval(model, device, valid_loader, evaluator)
         test_perf = eval(model, device, test_loader, evaluator)
 
-        # print({'Train': train_perf, 'Validation': valid_perf, 'Test': test_perf})
         print('Train:', train_perf[dataset.eval_metric],
               'Validation:', valid_perf[dataset.eval_metric],
               'Test:', test_perf[dataset.eval_metric],

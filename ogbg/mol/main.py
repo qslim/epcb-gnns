@@ -1,4 +1,5 @@
 import torch
+import random
 from torch_geometric.data import DataLoader
 from tensorboardX import SummaryWriter
 import numpy as np
@@ -14,6 +15,15 @@ from utils.config import process_config, get_args
 
 cls_criterion = torch.nn.BCEWithLogitsLoss()
 reg_criterion = torch.nn.MSELoss()
+
+
+class In:
+    def readline(self):
+        return "y\n"
+
+    def close(self):
+        pass
+
 
 def train(model, device, loader, optimizer, task_type):
     model.train()
@@ -71,6 +81,7 @@ def main():
     print(config)
 
     if config.get('seed') is not None:
+        random.seed(config.seed)
         torch.manual_seed(config.seed)
         np.random.seed(config.seed)
         if torch.cuda.is_available():
@@ -79,6 +90,9 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     ### automatic dataloading and splitting
+
+    sys.stdin = In()
+
     dataset = PygGraphPropPredDataset(name=config.dataset_name)
 
     if config.feature == 'full':
@@ -116,8 +130,7 @@ def main():
 
     ts_fk_algo_hp = str(config.time_stamp) + '_' \
                     + str(config.commit_id[0:7]) + '_' \
-                    + str(config.architecture.nonlinear_conv) + '_' \
-                    + str(config.architecture.variants.fea_activation) + '_' \
+                    + str(config.architecture.methods) + '_' \
                     + str(config.architecture.pooling) + '_' \
                     + str(config.architecture.JK) + '_' \
                     + str(config.architecture.layers) + '_' \
@@ -128,7 +141,8 @@ def main():
                     + str(config.hyperparams.step_size) + '_' \
                     + str(config.hyperparams.decay_rate) + '_' \
                     + 'B' + str(config.hyperparams.batch_size) + '_' \
-                    + 'S' + str(config.seed)
+                    + 'S' + str(config.seed if config.get('seed') is not None else "na") + '_' \
+                    + 'W' + str(config.num_workers if config.get('num_workers') is not None else "na")
 
     for epoch in range(1, config.hyperparams.epochs + 1):
         print("Epoch {} training...".format(epoch))

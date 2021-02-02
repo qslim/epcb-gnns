@@ -1,20 +1,19 @@
 {
-  "dataset_name": "ogbg-ppa",
+  "dataset_name": "REDDIT-BINARY",
   "num_workers": 4,
-  "feature": "full",
   "hyperparams": {
-    "batch_size": 32,
-    "epochs": 601,
-    "learning_rate": 0.0005,
-    "step_size": 20,
+    "batch_size": 64,
+    "epochs": 301,
+    "learning_rate": 0.001,
+    "step_size": 10,
     "decay_rate": 0.8
   },
   "architecture": {
-    "layers": 4,
+    "layers": 3,
     "hidden": 256,
     "pooling": "add",
     "JK": "cat",
-    "methods": "EB1",
+    "methods": "CB",
     "dropout": 0.5,
     "variants": {
       "BN": "Y"

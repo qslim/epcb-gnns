@@ -73,8 +73,7 @@ test_loader = DataLoader(test_dataset, batch_size=config.hyperparams.batch_size)
 val_loader = DataLoader(val_dataset, batch_size=config.hyperparams.batch_size)
 train_loader = DataLoader(train_dataset, batch_size=config.hyperparams.batch_size, shuffle=True)
 
-model = Net(dataset, config.architecture)
-model.to(device).reset_parameters()
+model = Net(dataset, config.architecture).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=config.hyperparams.learning_rate)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
                                             step_size=config.hyperparams.step_size,
@@ -82,7 +81,7 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
 
 ts_algo_hp = str(config.time_stamp) + '_' \
              + str(config.commit_id[0:7]) + '_' \
-             + str(config.architecture.nonlinear_conv) + '_' \
+             + str(config.architecture.methods) + '_' \
              + str(config.architecture.variants.fea_activation) + '_' \
              + str(config.architecture.pooling) + '_' \
              + str(config.architecture.JK) + '_' \
@@ -128,4 +127,3 @@ for epoch in range(1, config.hyperparams.epochs):
     writer.add_scalars(config.dataset_name + '_' + str(config.target), {ts_algo_hp + '/ls': loss}, epoch)
 
 writer.close()
-

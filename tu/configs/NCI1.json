@@ -1,0 +1,22 @@
+{
+  "dataset_name": "NCI1",
+  "num_workers": 4,
+  "hyperparams": {
+    "batch_size": 64,
+    "epochs": 501,
+    "learning_rate": 0.0004,
+    "step_size": 50,
+    "decay_rate": 0.75
+  },
+  "architecture": {
+    "layers": 4,
+    "hidden": 128,
+    "pooling": "add",
+    "JK": "cat",
+    "methods": "CB",
+    "dropout": 0.5,
+    "variants": {
+      "BN": "Y"
+    }
+  }
+}

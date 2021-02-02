@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch.nn import Linear, Sequential, ReLU, ELU, Sigmoid
 from utils.jumping_knowledge import JumpingKnowledge
 from torch_geometric.nn import global_add_pool, global_mean_pool
-from conv import GinConv, ExpandingBConv, CombBConv, ExpandingAConv, CombAConv
+from conv import GinConv, ExpC, CombC, ExpC_star, CombC_star
 
 
 class Net(torch.nn.Module):
@@ -15,27 +15,27 @@ class Net(torch.nn.Module):
         self.lin0 = Linear(dataset.num_features, config.hidden)
 
         self.convs = torch.nn.ModuleList()
-        if config.nonlinear_conv[:2] == 'EB':
+        if config.methods[:2] == 'EB':
             for i in range(config.layers):
-                self.convs.append(ExpandingBConv(config.hidden,
-                                                 int(config.nonlinear_conv[2:]),
+                self.convs.append(ExpC(config.hidden,
+                                                 int(config.methods[2:]),
                                                  config.variants))
-        elif config.nonlinear_conv[:2] == 'EA':
+        elif config.methods[:2] == 'EA':
             for i in range(config.layers):
-                self.convs.append(ExpandingAConv(config.hidden,
-                                                 int(config.nonlinear_conv[2:]),
+                self.convs.append(ExpC_star(config.hidden,
+                                                 int(config.methods[2:]),
                                                  config.variants))
-        elif config.nonlinear_conv == 'CB':
+        elif config.methods == 'CB':
             for i in range(config.layers):
-                self.convs.append(CombBConv(config.hidden, config.variants))
-        elif config.nonlinear_conv == 'CA':
+                self.convs.append(CombC(config.hidden, config.variants))
+        elif config.methods == 'CA':
             for i in range(config.layers):
-                self.convs.append(CombAConv(config.hidden, config.variants))
-        elif config.nonlinear_conv == 'GIN':
+                self.convs.append(CombC_star(config.hidden, config.variants))
+        elif config.methods == 'GIN':
             for i in range(config.layers):
                 self.convs.append(GinConv(config.hidden, config.variants))
         else:
-            ValueError('Undefined conv called {}'.format(config.nonlinear_conv))
+            raise ValueError('Undefined gnn layer called {}'.format(config.methods))
 
         self.JK = JumpingKnowledge(config.JK)
         if config.JK == 'cat':
@@ -50,14 +50,6 @@ class Net(torch.nn.Module):
             self.pool = global_add_pool
         elif config.pooling == 'mean':
             self.pool = global_mean_pool
-
-    def reset_parameters(self):
-        self.lin0.reset_parameters()
-        for conv in self.convs:
-            conv.reset_parameters()
-        self.lin1.reset_parameters()
-        self.lin2.reset_parameters()
-        self.lin3.reset_parameters()
 
     def forward(self, data):
         x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
@@ -76,4 +68,3 @@ class Net(torch.nn.Module):
 
     def __repr__(self):
         return self.__class__.__name__
-

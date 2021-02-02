@@ -1,22 +1,20 @@
 import torch
 import torch.nn.functional as F
+from torch.nn import Linear, Sequential, ReLU, ELU, Sigmoid
 from utils.jumping_knowledge import JumpingKnowledge
 from torch_geometric.nn import global_add_pool, global_mean_pool
-from conv import GinConv, ExpC, CombC, ExpC_star, CombC_star
+from conv import ExpC, CombC, ExpC_star, CombC_star
 
 
 class Net(torch.nn.Module):
     def __init__(self,
-                 config,
-                 num_class):
+                 dataset,
+                 config):
         super(Net, self).__init__()
-        self.node_encoder = torch.nn.Embedding(1, config.hidden)
+        self.lin0 = Linear(dataset.num_features, config.hidden)
 
         self.convs = torch.nn.ModuleList()
-        if config.methods == 'GIN':
-            for i in range(config.layers):
-                self.convs.append(GinConv(config.hidden, config.variants))
-        elif config.methods[:2] == 'EB':
+        if config.methods[:2] == 'EB':
             for i in range(config.layers):
                 self.convs.append(ExpC(config.hidden,
                                                  int(config.methods[2:]),
@@ -38,9 +36,11 @@ class Net(torch.nn.Module):
         self.JK = JumpingKnowledge(config.JK)
 
         if config.JK == 'cat':
-            self.graph_pred_linear = torch.nn.Linear(config.hidden * config.layers, num_class)
+            self.lin1 = Linear(config.layers * config.hidden, config.hidden)
         else:
-            self.graph_pred_linear = torch.nn.Linear(config.hidden, num_class)
+            self.lin1 = Linear(config.hidden, config.hidden)
+
+        self.lin2 = Linear(config.hidden, dataset.num_classes)
 
         if config.pooling == 'add':
             self.pool = global_add_pool
@@ -49,19 +49,22 @@ class Net(torch.nn.Module):
 
         self.dropout = config.dropout
 
-    def forward(self, batched_data):
-        x, edge_index, edge_attr, batch = batched_data.x, batched_data.edge_index, batched_data.edge_attr, batched_data.batch
-        x = self.node_encoder(x)
+    def forward(self, data):
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+        x = self.lin0(x)
         xs = []
         for conv in self.convs:
-            x = conv(x, edge_index, edge_attr)
+            x = conv(x, edge_index)
             xs += [x]
 
-        nr = self.JK(xs)
+        x = self.JK(xs)
 
-        nr = F.dropout(nr, p=self.dropout, training=self.training)
-        h_graph = self.pool(nr, batched_data.batch)
-        return self.graph_pred_linear(h_graph)
+        x = self.pool(x, batch)
+
+        x = F.relu(self.lin1(x))
+        x = F.dropout(x, p=self.dropout, training=self.training)
+        x = self.lin2(x)
+        return F.log_softmax(x, dim=-1)
 
     def __repr__(self):
         return self.__class__.__name__

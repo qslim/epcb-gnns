@@ -1,7 +1,7 @@
 {
   "dataset_name": "ogbg-molhiv",
   "seed": 777,
-  "num_workers": 0,
+  "num_workers": 4,
   "feature": "full",
   "hyperparams": {
     "batch_size": 64,
@@ -15,11 +15,10 @@
     "hidden": 64,
     "pooling": "mean",
     "JK": "cat",
-    "nonlinear_conv": "EB1",
+    "methods": "EB1",
     "dropout": 0.5,
     "variants": {
-      "BN": "Y",
-      "fea_activation": "ReLU"
+      "BN": "Y"
     }
   }
 }

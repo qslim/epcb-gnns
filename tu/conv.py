@@ -1,8 +1,8 @@
 import torch
 from torch_geometric.nn.conv import MessagePassing
-from torch_geometric.utils import remove_self_loops, add_self_loops
+from torch_geometric.utils import remove_self_loops, add_self_loops, softmax
 import torch.nn.functional as F
-from torch.nn import Linear, Sequential, Tanh, ReLU, ELU, BatchNorm1d as BN
+from torch.nn import Linear, Sequential, Tanh, ReLU, ELU, BatchNorm1d as BN, Parameter
 
 
 class ExpC(MessagePassing):
@@ -26,20 +26,16 @@ class ExpC(MessagePassing):
         else:
             self.BN = None
 
-        # edge_attr is two dimensional after augment_edge transformation
-        self.edge_encoder = torch.nn.Linear(2, hidden)
-
-    def forward(self, x, edge_index, edge_attr):
-        edge_attr = self.edge_encoder(edge_attr)
+    def forward(self, x, edge_index):
         edge_index, _ = remove_self_loops(edge_index)
         # edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
-        out = self.propagate(edge_index, x=x, edge_attr=edge_attr)
+        out = self.propagate(edge_index, x=x)
         if self.BN is not None:
             out = self.BN(out)
         return out
 
-    def message(self, x_i, x_j, edge_attr):
-        xe = x_j + edge_attr
+    def message(self, x_i, x_j):
+        xe = x_j
         aggr_emb = self.aggr_mlp(torch.cat([x_i, xe], dim=-1))
         feature2d = torch.matmul(aggr_emb.unsqueeze(-1), xe.unsqueeze(-1)
                                  .transpose(-1, -2)).squeeze(-1).view(-1, self.hidden * self.num_aggr)
@@ -76,20 +72,16 @@ class ExpC_star(MessagePassing):
         else:
             self.BN = None
 
-        # edge_attr is two dimensional after augment_edge transformation
-        self.edge_encoder = torch.nn.Linear(2, hidden)
-
-    def forward(self, x, edge_index, edge_attr):
-        edge_attr = self.edge_encoder(edge_attr)
+    def forward(self, x, edge_index):
         edge_index, _ = remove_self_loops(edge_index)
         # edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
-        out = self.fea_mlp(self.propagate(edge_index, x=x, edge_attr=edge_attr))
+        out = self.fea_mlp(self.propagate(edge_index, x=x))
         if self.BN is not None:
             out = self.BN(out)
         return out
 
-    def message(self, x_i, x_j, edge_attr):
-        xe = x_j + edge_attr
+    def message(self, x_i, x_j):
+        xe = x_j
         aggr_emb = self.aggr_mlp(torch.cat([x_i, xe], dim=-1))
         feature2d = torch.matmul(aggr_emb.unsqueeze(-1), xe.unsqueeze(-1)
                                  .transpose(-1, -2)).squeeze(-1).view(-1, self.hidden * self.num_aggr)
@@ -124,20 +116,16 @@ class CombC(MessagePassing):
         else:
             self.BN = None
 
-        # edge_attr is two dimensional after augment_edge transformation
-        self.edge_encoder = torch.nn.Linear(2, hidden)
-
-    def forward(self, x, edge_index, edge_attr):
-        edge_attr = self.edge_encoder(edge_attr)
+    def forward(self, x, edge_index):
         edge_index, _ = remove_self_loops(edge_index)
         # edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
-        out = self.propagate(edge_index, x=x, edge_attr=edge_attr)
+        out = self.propagate(edge_index, x=x)
         if self.BN is not None:
             out = self.BN(out)
         return out
 
-    def message(self, x_i, x_j, edge_attr):
-        xe = x_j + edge_attr
+    def message(self, x_i, x_j):
+        xe = x_j
         aggr_emb = self.aggr_mlp(torch.cat([x_i, xe], dim=-1))
         return self.fea_mlp(aggr_emb * xe)
 
@@ -168,63 +156,22 @@ class CombC_star(MessagePassing):
         else:
             self.BN = None
 
-        # edge_attr is two dimensional after augment_edge transformation
-        self.edge_encoder = torch.nn.Linear(2, hidden)
-
-    def forward(self, x, edge_index, edge_attr):
-        edge_attr = self.edge_encoder(edge_attr)
+    def forward(self, x, edge_index):
         edge_index, _ = remove_self_loops(edge_index)
         # edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
-        out = self.fea_mlp(self.propagate(edge_index, x=x, edge_attr=edge_attr))
+        out = self.fea_mlp(self.propagate(edge_index, x=x))
         if self.BN is not None:
             out = self.BN(out)
         return out
 
-    def message(self, x_i, x_j, edge_attr):
-        xe = x_j + edge_attr
+    def message(self, x_i, x_j):
+        xe = x_j
         aggr_emb = self.aggr_mlp(torch.cat([x_i, xe], dim=-1))
         return aggr_emb * xe
 
     def update(self, aggr_out, x):
         root_emb = self.aggr_mlp(torch.cat([x, x], dim=-1))
         return aggr_out + root_emb * x
-
-    def __repr__(self):
-        return self.__class__.__name__
-
-
-class GinConv(MessagePassing):
-    def __init__(self, hidden, config, **kwargs):
-        super(GinConv, self).__init__(aggr='add', **kwargs)
-
-        self.fea_mlp = Sequential(
-            Linear(hidden, hidden),
-            ReLU(),
-            Linear(hidden, hidden),
-            ReLU())
-
-        if config.BN == 'Y':
-            self.BN = BN(hidden)
-        else:
-            self.BN = None
-
-        # edge_attr is two dimensional after augment_edge transformation
-        self.edge_encoder = torch.nn.Linear(2, hidden)
-
-    def forward(self, x, edge_index, edge_attr):
-        edge_attr = self.edge_encoder(edge_attr)
-        edge_index, _ = remove_self_loops(edge_index)
-        # edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
-        out = self.fea_mlp(self.propagate(edge_index, x=x, edge_attr=edge_attr))
-        if self.BN is not None:
-            out = self.BN(out)
-        return out
-
-    def message(self, x_j, edge_attr):
-        return x_j + edge_attr
-
-    def update(self, aggr_out, x):
-        return aggr_out + x
 
     def __repr__(self):
         return self.__class__.__name__

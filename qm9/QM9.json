@@ -1,7 +1,6 @@
 {
   "dataset_name": "QM9",
   "target": 0,
-  "model": "NLG_R",
   "seed": 777,
   "hyperparams": {
     "batch_size": 64,
@@ -15,7 +14,7 @@
     "hidden": 256,
     "pooling": "add",
     "JK": "cat",
-    "nonlinear_conv": "EC32",
+    "methods": "EB1",
     "variants": {
       "BN": "N",
       "fea_activation": "ReLU"

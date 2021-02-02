@@ -4,25 +4,19 @@ from torch_geometric.utils import remove_self_loops, add_self_loops
 import torch.nn.functional as F
 from torch.nn import Linear, Sequential, Tanh, ReLU, ELU, BatchNorm1d as BN
 from ogb.graphproppred.mol_encoder import BondEncoder
-from utils.inits import reset
 
 
-class ExpandingBConv(MessagePassing):
+class ExpC(MessagePassing):
     def __init__(self, hidden, num_aggr, config, **kwargs):
-        super(ExpandingBConv, self).__init__(aggr='add', **kwargs)
+        super(ExpC, self).__init__(aggr='add', **kwargs)
         self.hidden = hidden
         self.num_aggr = num_aggr
-
-        if config.fea_activation == 'ELU':
-            self.fea_activation = ELU()
-        elif config.fea_activation == 'ReLU':
-            self.fea_activation = ReLU()
 
         self.fea_mlp = Sequential(
             Linear(hidden * self.num_aggr, hidden),
             ReLU(),
             Linear(hidden, hidden),
-            self.fea_activation)
+            ReLU())
 
         self.aggr_mlp = Sequential(
             Linear(hidden * 2, self.num_aggr),
@@ -34,14 +28,6 @@ class ExpandingBConv(MessagePassing):
             self.BN = None
 
         self.bond_encoder = BondEncoder(emb_dim=hidden)
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        pass
-        # reset(self.fea_mlp)
-        # reset(self.aggr_mlp)
-        # self.bond_encoder.reset_parameters()
 
     def forward(self, x, edge_index, edge_attr):
         edge_attr = self.bond_encoder(edge_attr)
@@ -69,22 +55,17 @@ class ExpandingBConv(MessagePassing):
         return self.__class__.__name__
 
 
-class ExpandingAConv(MessagePassing):
+class ExpC_star(MessagePassing):
     def __init__(self, hidden, num_aggr, config, **kwargs):
-        super(ExpandingAConv, self).__init__(aggr='add', **kwargs)
+        super(ExpC_star, self).__init__(aggr='add', **kwargs)
         self.hidden = hidden
         self.num_aggr = num_aggr
-
-        if config.fea_activation == 'ELU':
-            self.fea_activation = ELU()
-        elif config.fea_activation == 'ReLU':
-            self.fea_activation = ReLU()
 
         self.fea_mlp = Sequential(
             Linear(hidden * self.num_aggr, hidden),
             ReLU(),
             Linear(hidden, hidden),
-            self.fea_activation)
+            ReLU())
 
         self.aggr_mlp = Sequential(
             Linear(hidden * 2, self.num_aggr),
@@ -96,14 +77,6 @@ class ExpandingAConv(MessagePassing):
             self.BN = None
 
         self.bond_encoder = BondEncoder(emb_dim=hidden)
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        pass
-        # reset(self.fea_mlp)
-        # reset(self.aggr_mlp)
-        # self.bond_encoder.reset_parameters()
 
     def forward(self, x, edge_index, edge_attr):
         edge_attr = self.bond_encoder(edge_attr)
@@ -131,20 +104,15 @@ class ExpandingAConv(MessagePassing):
         return self.__class__.__name__
 
 
-class CombBConv(MessagePassing):
+class CombC(MessagePassing):
     def __init__(self, hidden, config, **kwargs):
-        super(CombBConv, self).__init__(aggr='add', **kwargs)
-
-        if config.fea_activation == 'ELU':
-            self.fea_activation = ELU()
-        elif config.fea_activation == 'ReLU':
-            self.fea_activation = ReLU()
+        super(CombC, self).__init__(aggr='add', **kwargs)
 
         self.fea_mlp = Sequential(
             Linear(hidden, hidden),
             ReLU(),
             Linear(hidden, hidden),
-            self.fea_activation)
+            ReLU())
 
         self.aggr_mlp = Sequential(
             Linear(hidden * 2, hidden),
@@ -156,14 +124,6 @@ class CombBConv(MessagePassing):
             self.BN = None
 
         self.bond_encoder = BondEncoder(emb_dim=hidden)
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        pass
-        # reset(self.fea_mlp)
-        # reset(self.aggr_mlp)
-        # self.bond_encoder.reset_parameters()
 
     def forward(self, x, edge_index, edge_attr):
         edge_attr = self.bond_encoder(edge_attr)
@@ -187,20 +147,15 @@ class CombBConv(MessagePassing):
         return self.__class__.__name__
 
 
-class CombAConv(MessagePassing):
+class CombC_star(MessagePassing):
     def __init__(self, hidden, config, **kwargs):
-        super(CombAConv, self).__init__(aggr='add', **kwargs)
-
-        if config.fea_activation == 'ELU':
-            self.fea_activation = ELU()
-        elif config.fea_activation == 'ReLU':
-            self.fea_activation = ReLU()
+        super(CombC_star, self).__init__(aggr='add', **kwargs)
 
         self.fea_mlp = Sequential(
             Linear(hidden, hidden),
             ReLU(),
             Linear(hidden, hidden),
-            self.fea_activation)
+            ReLU())
 
         self.aggr_mlp = Sequential(
             Linear(hidden * 2, hidden),
@@ -212,14 +167,6 @@ class CombAConv(MessagePassing):
             self.BN = None
 
         self.bond_encoder = BondEncoder(emb_dim=hidden)
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        pass
-        # reset(self.fea_mlp)
-        # reset(self.aggr_mlp)
-        # self.bond_encoder.reset_parameters()
 
     def forward(self, x, edge_index, edge_attr):
         edge_attr = self.bond_encoder(edge_attr)
@@ -247,30 +194,18 @@ class GinConv(MessagePassing):
     def __init__(self, hidden, config, **kwargs):
         super(GinConv, self).__init__(aggr='add', **kwargs)
 
-        if config.fea_activation == 'ELU':
-            self.fea_activation = ELU()
-        elif config.fea_activation == 'ReLU':
-            self.fea_activation = ReLU()
-
         self.fea_mlp = Sequential(
             Linear(hidden, hidden),
             ReLU(),
             Linear(hidden, hidden),
-            self.fea_activation)
+            ReLU())
 
-        if config.BN == 'T':
+        if config.BN == 'Y':
             self.BN = BN(hidden)
         else:
             self.BN = None
 
         self.bond_encoder = BondEncoder(emb_dim=hidden)
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        pass
-        # reset(self.fea_mlp)
-        # self.bond_encoder.reset_parameters()
 
     def forward(self, x, edge_index, edge_attr):
         edge_attr = self.bond_encoder(edge_attr)

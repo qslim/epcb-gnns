@@ -1,5 +1,5 @@
 __pycache__/
-ogbg/dataset/
+ogbg/*/dataset/
 data/
 build/
 dist/
@@ -10,6 +10,7 @@ alpha/
 .idea/
 .coverage
 .coverage.*
+core.[0-9]*
 
 !torch_geometric/data/
 !test/data/

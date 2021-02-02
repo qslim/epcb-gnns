@@ -1,3 +1,4 @@
+import random
 import torch
 from torch_geometric.data import DataLoader
 from tensorboardX import SummaryWriter
@@ -26,10 +27,15 @@ from model import Net
 from utils.config import process_config, get_args
 
 
-multicls_criterion = torch.nn.CrossEntropyLoss()
+class In:
+    def readline(self):
+        return "y\n"
+
+    def close(self):
+        pass
 
 
-def train(model, device, loader, optimizer):
+def train(model, device, loader, optimizer, multicls_criterion):
     model.train()
 
     loss_accum = 0
@@ -44,7 +50,7 @@ def train(model, device, loader, optimizer):
 
             loss = 0
             for i in range(len(pred_list)):
-                loss += multicls_criterion(pred_list[i].to(torch.float32), batch.y_arr[:,i])
+                loss += multicls_criterion(pred_list[i].to(torch.float32), batch.y_arr[:, i])
 
             loss = loss / len(pred_list)
 
@@ -98,6 +104,7 @@ def main():
     print(config)
 
     if config.get('seed') is not None:
+        random.seed(config.seed)
         torch.manual_seed(config.seed)
         np.random.seed(config.seed)
         if torch.cuda.is_available():
@@ -106,6 +113,9 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     ### automatic dataloading and splitting
+
+    sys.stdin = In()
+
     dataset = PygGraphPropPredDataset(name=config.dataset_name)
 
     seq_len_list = np.array([len(seq) for seq in dataset.data.y])
@@ -196,10 +206,11 @@ def main():
                 max_seq_len=config.max_seq_len,
                 node_encoder=node_encoder).to(device)
 
-    # optimizer = optim.Adam(model.parameters(), lr=0.001)
     optimizer = optim.Adam(model.parameters(), lr=config.hyperparams.learning_rate)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=config.hyperparams.step_size,
                                                 gamma=config.hyperparams.decay_rate)
+
+    multicls_criterion = torch.nn.CrossEntropyLoss()
 
     valid_curve = []
     test_curve = []
@@ -210,8 +221,7 @@ def main():
 
     ts_fk_algo_hp = str(config.time_stamp) + '_' \
                     + str(config.commit_id[0:7]) + '_' \
-                    + str(config.architecture.nonlinear_conv) + '_' \
-                    + str(config.architecture.variants.fea_activation) + '_' \
+                    + str(config.architecture.methods) + '_' \
                     + str(config.architecture.pooling) + '_' \
                     + str(config.architecture.JK) + '_' \
                     + str(config.architecture.layers) + '_' \
@@ -222,11 +232,12 @@ def main():
                     + str(config.hyperparams.step_size) + '_' \
                     + str(config.hyperparams.decay_rate) + '_' \
                     + 'B' + str(config.hyperparams.batch_size) + '_' \
-                    + 'S' + str(config.seed)
+                    + 'S' + str(config.seed if config.get('seed') is not None else "na") + '_' \
+                    + 'W' + str(config.num_workers if config.get('num_workers') is not None else "na")
 
     for epoch in range(1, config.hyperparams.epochs + 1):
         print("Epoch {} training...".format(epoch))
-        train_loss = train(model, device, train_loader, optimizer)
+        train_loss = train(model, device, train_loader, optimizer, multicls_criterion)
 
         scheduler.step()
 
@@ -235,7 +246,6 @@ def main():
         valid_perf = eval(model, device, valid_loader, evaluator, arr_to_seq=lambda arr: decode_arr_to_seq(arr, idx2vocab))
         test_perf = eval(model, device, test_loader, evaluator, arr_to_seq=lambda arr: decode_arr_to_seq(arr, idx2vocab))
 
-        # print({'Train': train_perf, 'Validation': valid_perf, 'Test': test_perf})
         print('Train:', train_perf[dataset.eval_metric],
               'Validation:', valid_perf[dataset.eval_metric],
               'Test:', test_perf[dataset.eval_metric],
@@ -262,10 +272,6 @@ def main():
     print('Finished test: {}, Validation: {}, Train: {}, epoch: {}, best train: {}, best loss: {}'
           .format(test_curve[best_val_epoch], valid_curve[best_val_epoch], train_curve[best_val_epoch],
                   best_val_epoch, best_train, min(trainL_curve)))
-
-    # if not config.filename == '':
-    #     result_dict = {'Val': valid_curve[best_val_epoch], 'Test': test_curve[best_val_epoch], 'Train': train_curve[best_val_epoch], 'BestTrain': best_train}
-    #     torch.save(result_dict, config.filename)
 
 
 if __name__ == "__main__":

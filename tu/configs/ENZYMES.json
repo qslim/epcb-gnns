@@ -1,20 +1,19 @@
 {
-  "dataset_name": "ogbg-ppa",
+  "dataset_name": "ENZYMES",
   "num_workers": 4,
-  "feature": "full",
   "hyperparams": {
     "batch_size": 32,
-    "epochs": 601,
+    "epochs": 501,
     "learning_rate": 0.0005,
-    "step_size": 20,
-    "decay_rate": 0.8
+    "step_size": 50,
+    "decay_rate": 0.75
   },
   "architecture": {
-    "layers": 4,
-    "hidden": 256,
+    "layers": 2,
+    "hidden": 512,
     "pooling": "add",
     "JK": "cat",
-    "methods": "EB1",
+    "methods": "EB4",
     "dropout": 0.5,
     "variants": {
       "BN": "Y"

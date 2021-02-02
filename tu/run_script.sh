@@ -3,9 +3,9 @@
 export CUDA_VISIBLE_DEVICES=0
 export PYTHONIOENCODING=utf-8
 
-dataset="ogbg-mol"
-output_dir="../../../epcb_results/ogbg/"
-config_file="./"$dataset".json"
+dataset="REDDIT-MULTI-12K"
+output_dir="../../epcb_results/tu/"
+config_file="./configs/"$dataset".json"
 
 time_stamp=`date '+%s'`
 commit_id=`git rev-parse HEAD`

@@ -1,0 +1,10 @@
+numpy
+torch>=1.4.0
+torch-scatter
+torch-sparse
+torch-cluster
+torch-spline-conv
+torch-geometric==1.5.0
+ogb==1.2.1
+easydict
+tensorboardX
