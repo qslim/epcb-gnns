@@ -1,9 +1,9 @@
-# Breaking the Expressive Bottlenecks of Graph Neural Networks
+# Breaking the Expression Bottleneck of Graph Neural Networks
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 This is the code of the paper
-*Breaking the Expressive Bottlenecks of Graph Neural Networks*.
+*Breaking the Expression Bottleneck of Graph Neural Networks*.
 
 ## Table of Contents <!-- omit in toc -->
 
@@ -141,6 +141,18 @@ Then, run the following script:
 
 ```sh
 ./run_script.sh
+```
+
+## Reference
+```
+@ARTICLE {yang2022breaking,
+	author = {Yang, Mingqi and Wang, Renjian and Shen, Yanming and Qi, Heng and Yin, Baocai},
+	journal = {IEEE Transactions on Knowledge & Data Engineering},
+	title = {Breaking the Expression Bottleneck of Graph Neural Networks},
+	year = {2022},
+	doi = {10.1109/TKDE.2022.3168070},
+	address = {Los Alamitos, CA, USA}
+}
 ```
 
 ## License
